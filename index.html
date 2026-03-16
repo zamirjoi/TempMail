@@ -6,7 +6,6 @@
     <title>Delta Mail - Shared Temporary Email</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
-
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
@@ -18,32 +17,19 @@
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         .material-symbols-outlined { font-size: inherit; vertical-align: middle; }
 
-        @keyframes fill-bar {
-            from { width: 0%; }
-            to { width: 100%; }
-        }
+        @keyframes fill-bar { from { width: 0%; } to { width: 100%; } }
         .animate-fill-bar { animation: fill-bar 2s ease-out forwards; }
         
-        @keyframes toastIn {
-            from { transform: translateY(100%) scale(0.9); opacity: 0; }
-            to { transform: translateY(0) scale(1); opacity: 1; }
-        }
-        @keyframes toastOut {
-            from { transform: translateY(0) scale(1); opacity: 1; }
-            to { transform: translateY(100%) scale(0.9); opacity: 0; }
-        }
+        @keyframes toastIn { from { transform: translateY(100%) scale(0.9); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
+        @keyframes toastOut { from { transform: translateY(0) scale(1); opacity: 1; } to { transform: translateY(100%) scale(0.9); opacity: 0; } }
         .toast-in { animation: toastIn 0.3s ease-out forwards; }
         .toast-out { animation: toastOut 0.3s ease-in forwards; }
 
         @keyframes spin { to { transform: rotate(360deg); } }
         .spinner {
-            display: inline-block;
-            width: 1.25rem;
-            height: 1.25rem;
-            border: 2px solid rgba(255, 255, 255, 0.3);
-            border-radius: 50%;
-            border-top-color: white;
-            animation: spin 1s ease-in-out infinite;
+            display: inline-block; width: 1.25rem; height: 1.25rem;
+            border: 2px solid rgba(255, 255, 255, 0.3); border-radius: 50%;
+            border-top-color: white; animation: spin 1s ease-in-out infinite;
         }
         .dark .spinner { border: 2px solid rgba(0,0,0,0.3); border-top-color: black; }
 
@@ -90,7 +76,9 @@
                 </div>
 
                 <div class="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-lg border border-gray-100 dark:border-gray-700">
-                    <p class="text-xs font-semibold text-blue-500 uppercase tracking-wider mb-2">Current Inbox</p>
+                    <p class="text-xs font-semibold text-blue-500 uppercase tracking-wider mb-2 flex items-center gap-1">
+                        <span class="material-symbols-outlined text-sm">save</span> Saved Inbox
+                    </p>
                     
                     <div class="space-y-3">
                         <div>
@@ -185,13 +173,11 @@
     <div id="toast-container" class="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 space-y-2 w-max max-w-[90%] pointer-events-none"></div>
     
     <script type="module">
-        // --- STATE MANAGEMENT ---
         const API_BASE = 'https://api.mail.tm';
         let currentAccount = { id: null, address: null, password: null, token: null };
         let inboxInterval = null;
         let cachedMessages = [];
 
-        // --- DOM ELEMENTS ---
         const DOMElements = {
             splashScreen: document.getElementById('splash-screen'),
             appContainer: document.getElementById('app-container'),
@@ -220,7 +206,6 @@
             deleteMessageBtn: document.getElementById('delete-message-btn'),
         };
 
-        // --- UTILITY FUNCTIONS ---
         const safeString = (str) => (str || '').toString();
         const escapeHTML = (str) => {
             const p = document.createElement('p');
@@ -241,12 +226,11 @@
             }
         };
 
-        // --- API FUNCTIONS ---
         const getNewEmail = async (isDelete = false) => {
             showSpinner(DOMElements.changeMailBtn, true);
             showSpinner(DOMElements.deleteMailBtn, true);
             
-            // If Destroy is clicked, delete the account entirely from mail.tm
+            // If Destroy is clicked, delete from mail.tm and clear local storage
             if (isDelete && currentAccount.id) {
                 try {
                     await fetchWithTimeout(`${API_BASE}/accounts/${currentAccount.id}`, {
@@ -255,6 +239,9 @@
                     });
                     showToast("Account permanently destroyed.", "info");
                 } catch (e) { console.error("Failed to delete old account:", e); }
+                
+                // Clear the saved account from the browser memory
+                localStorage.removeItem('deltaMailSavedAccount');
             }
             
             clearInterval(inboxInterval);
@@ -269,7 +256,6 @@
                 const domains = await domainResponse.json();
                 const domain = domains['hydra:member'][0].domain;
 
-                // DeltaMarket Custom Branding logic
                 const randomMailNum = Math.floor(10000 + Math.random() * 90000);
                 const randomPassNum = Math.floor(10000 + Math.random() * 90000);
 
@@ -299,8 +285,11 @@
                     token: tokenData.token,
                 };
 
+                // Save the new account to the browser so it survives refreshing
+                localStorage.setItem('deltaMailSavedAccount', JSON.stringify({ address, password }));
+
                 updateUIWithCurrentAccount();
-                if (!isDelete) showToast("New email generated!", "success");
+                if (!isDelete) showToast("New email generated and saved!", "success");
                 
                 checkInbox();
                 inboxInterval = setInterval(checkInbox, 10000); 
@@ -313,16 +302,16 @@
             }
         };
 
-        const loginToSharedEmail = async () => {
-            const address = DOMElements.loginAddress.value.trim();
-            const password = DOMElements.loginPassword.value.trim();
+        const loginToSharedEmail = async (autoAddress = null, autoPassword = null, silent = false) => {
+            const address = autoAddress || DOMElements.loginAddress.value.trim();
+            const password = autoPassword || DOMElements.loginPassword.value.trim();
 
             if (!address || !password) {
-                showToast("Please enter both email and password.", "warning");
-                return;
+                if(!silent) showToast("Please enter both email and password.", "warning");
+                return false;
             }
 
-            showSpinner(DOMElements.loginBtn, true);
+            if(!silent) showSpinner(DOMElements.loginBtn, true);
 
             try {
                 const tokenResponse = await fetchWithTimeout(`${API_BASE}/token`, {
@@ -341,23 +330,28 @@
                     token: tokenData.token,
                 };
 
+                // Save the account to browser storage
+                localStorage.setItem('deltaMailSavedAccount', JSON.stringify({ address, password }));
+
                 updateUIWithCurrentAccount();
                 
                 DOMElements.loginAddress.value = '';
                 DOMElements.loginPassword.value = '';
-                cachedMessages = []; // Clear current UI state
+                cachedMessages = [];
 
-                showToast("Successfully logged into shared inbox!", "success");
+                if(!silent) showToast("Successfully logged into inbox!", "success");
                 
                 clearInterval(inboxInterval);
                 await checkInbox();
                 inboxInterval = setInterval(checkInbox, 10000); 
+                return true;
 
             } catch (error) {
                 console.error('Error logging in:', error);
-                showToast("Login failed. Check credentials or it was deleted.", "error");
+                if(!silent) showToast("Login failed. Check credentials.", "error");
+                return false;
             } finally {
-                showSpinner(DOMElements.loginBtn, false);
+                if(!silent) showSpinner(DOMElements.loginBtn, false);
             }
         };
 
@@ -371,7 +365,8 @@
                 });
 
                 if (response.status === 401) {
-                    showToast("Session expired or account deleted.", "warning");
+                    showToast("Session expired. Getting new email...", "warning");
+                    localStorage.removeItem('deltaMailSavedAccount');
                     await getNewEmail();
                     return;
                 }
@@ -391,7 +386,7 @@
             DOMElements.homeScreen.classList.add('hidden');
             DOMElements.emailScreen.classList.remove('hidden');
             DOMElements.emailScreen.classList.add('flex');
-            DOMElements.emailSubjectHeader.dataset.messageId = id; // Save ID for deletion
+            DOMElements.emailSubjectHeader.dataset.messageId = id;
             
             try {
                 const response = await fetchWithTimeout(`${API_BASE}/messages/${id}`, {
@@ -423,7 +418,6 @@
             }
         };
 
-        // --- UI & HELPER FUNCTIONS ---
         const updateUIWithCurrentAccount = () => {
             DOMElements.emailAddress.textContent = currentAccount.address;
             DOMElements.emailPassword.textContent = currentAccount.password;
@@ -542,7 +536,6 @@
             }
         };
 
-        // --- THEME MANAGEMENT ---
         const applyTheme = (theme) => {
             if (theme === 'dark') {
                 document.documentElement.classList.add('dark');
@@ -560,7 +553,6 @@
             applyTheme(newTheme);
         };
 
-        // --- INITIALIZATION ---
         const initApp = async () => {
             const savedTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
             applyTheme(savedTheme);
@@ -571,16 +563,32 @@
                 DOMElements.splashScreen.addEventListener('transitionend', () => DOMElements.splashScreen.style.display = 'none');
             }, 2200);
 
-            await getNewEmail();
+            // Check if user has a saved account in local storage
+            const savedAccountStr = localStorage.getItem('deltaMailSavedAccount');
+            if (savedAccountStr) {
+                try {
+                    const savedAccount = JSON.parse(savedAccountStr);
+                    // Silently log back into the saved account
+                    const loginSuccess = await loginToSharedEmail(savedAccount.address, savedAccount.password, true);
+                    if (!loginSuccess) {
+                        // If token is dead or account was deleted on server, get a new one
+                        await getNewEmail();
+                    }
+                } catch (e) {
+                    await getNewEmail();
+                }
+            } else {
+                await getNewEmail();
+            }
 
             // Event Listeners
             DOMElements.copyCredentialsBtn.addEventListener('click', copyCredentials);
             DOMElements.changeMailBtn.addEventListener('click', () => getNewEmail(false));
-            DOMElements.deleteMailBtn.addEventListener('click', () => getNewEmail(true)); // Pass true to destroy
+            DOMElements.deleteMailBtn.addEventListener('click', () => getNewEmail(true)); 
             DOMElements.refreshBtn.addEventListener('click', checkInbox);
             DOMElements.themeToggleBtn.addEventListener('click', toggleTheme);
             DOMElements.backToInboxBtn.addEventListener('click', showHomeScreen);
-            DOMElements.loginBtn.addEventListener('click', loginToSharedEmail);
+            DOMElements.loginBtn.addEventListener('click', () => loginToSharedEmail(null, null, false));
             
             DOMElements.inboxList.addEventListener('click', (e) => {
                 const emailItem = e.target.closest('[data-id]');
